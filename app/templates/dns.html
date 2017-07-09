@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+
+<main class="container" id="dns">
+
+    <h1>DNS Entries</h1>
+
+    <p>
+        Showing all A records for subdomains on {{ zone.name[:-1] }} and matching them to our servers, if possible.
+    </p>
+
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Domain String</th>
+                <th>IP(s)</th>
+                <th>Server Friendly Name(s)</th>
+                <th>Cluster</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in dns_records -%}
+
+            {%- set highlight = {'yes': True} %}
+            {%- for server in servers -%}
+            {%- if server.ip_string in record.records -%}
+                {%- if highlight.update({'yes': False}) -%} {%- endif -%}
+            {%- endif -%}
+            {%- endfor -%}
+
+            <tr 
+            {%- if highlight['yes'] -%}
+            {{ "" }} class="danger"
+            {%- endif -%}
+            >
+                <td>{{ record.name }}</td>
+                <td>
+                    {%- for ip in record.records -%}
+                    <span class="ip"><code>{{ ip }}</code></span>
+                    {%- endfor -%}
+                </td>
+                <td>
+                    {%- for server in servers -%}
+                        {%- if server.ip_string in record.records -%}
+                        <span class="friendly_name"><code>{{ server.friendly_name }}</code></span>
+                        {%- endif -%}
+                    {%- endfor -%}
+                </td>
+                <td>
+                    {%- set clusterlist = [] -%}
+                    {%- for server in servers -%}
+                        {%- if server.ip_string in record.records -%}
+                            {%- if clusterlist.append(server.cluster_name) -%} {%- endif -%}
+                        {%- endif -%}
+                    {%- endfor -%}
+                    {%- if clusterlist -%}
+                    {{ clusterlist[0] }}
+                    {%- endif -%}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</main>
+
+{% endblock %}
+
