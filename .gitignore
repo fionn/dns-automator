@@ -1,5 +1,6 @@
 *.swp
-__pycache__
-secrets.py
-environment
-
+*.pdf
+__pycache__/
+.mypy_cache/
+credentials.py
+venv/
