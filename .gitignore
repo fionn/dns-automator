@@ -2,5 +2,5 @@
 *.pdf
 __pycache__/
 .mypy_cache/
-credentials.py
+aws_credentials.sh
 venv/

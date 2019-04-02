@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """DNS logic"""
 
-import route53 # type: ignore
+import os
+
 import boto
-from .credentials import ACCESS_ID, ACCESS_SECRET
+import route53 # type: ignore
+
+AWS_ACCESS_ID = os.environ["AWS_ACCESS_ID"]
+AWS_ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
 
 # pylint: disable=too-few-public-methods
 class Cluster():
@@ -64,8 +68,8 @@ class Server(Cluster):
 
         ips.append(self.ip_string)
 
-        conn = boto.connect_route53(aws_access_key_id=ACCESS_ID,
-                                    aws_secret_access_key=ACCESS_SECRET)
+        conn = boto.connect_route53(aws_access_key_id=AWS_ACCESS_ID,
+                                    aws_secret_access_key=AWS_ACCESS_SECRET)
 
         changes = boto.route53.record.ResourceRecordSets(conn, # type: ignore
                                                          self.__class__.zone.id)
@@ -91,8 +95,8 @@ class Server(Cluster):
 
         ips = list(filter(lambda x: x != self.ip_string, ips))
 
-        conn = boto.connect_route53(aws_access_key_id=ACCESS_ID,
-                                    aws_secret_access_key=ACCESS_SECRET)
+        conn = boto.connect_route53(aws_access_key_id=AWS_ACCESS_ID,
+                                    aws_secret_access_key=AWS_ACCESS_SECRET)
 
         changes = boto.route53.record.ResourceRecordSets(conn, # type: ignore
                                                          self.__class__.zone.id)
@@ -115,8 +119,8 @@ def dns() -> list:
     and assigns them to class variables"""
     print("Fetching DNS A records... ", end="", flush=True)
 
-    conn = route53.connect(aws_access_key_id=ACCESS_ID,
-                           aws_secret_access_key=ACCESS_SECRET)
+    conn = route53.connect(aws_access_key_id=AWS_ACCESS_ID,
+                           aws_secret_access_key=AWS_ACCESS_SECRET)
 
     zone = list(conn.list_hosted_zones())[0]
     records = [record for record in zone.record_sets]
