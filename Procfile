@@ -1,1 +1,1 @@
-web: gunicorn app:app --preload --log-file=-
+web: gunicorn "app:create_app()" --preload --log-file=-

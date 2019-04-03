@@ -2,6 +2,7 @@
 """DNS logic"""
 
 import os
+from typing import List
 
 import boto
 import route53 # type: ignore
@@ -12,13 +13,13 @@ AWS_ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
 # pylint: disable=too-few-public-methods
 class Cluster():
     """A class for cluster objects"""
-    instances: list = []
-    records: list = []
-    zone = None
+    instances: List["Cluster"] = []
+    records: List["route53.resource_record_set.AResourceRecordSet"] = []
+    zone: "route53.hosted_zone.HostedZone" = None
     n = 4 # Number of unique clusters
 
     def __init__(self, cluster_id: int) -> None:
-        self.__class__.instances.append(self)
+        self.instances.append(self)
         self.cluster_id = cluster_id
         self.cluster_name = self._name()
         self.subdomain = self._subdomain()
@@ -47,21 +48,21 @@ class Server(Cluster):
 
     def __init__(self, cluster_id: int, friendly_name: str) -> None:
         super().__init__(cluster_id)
-        self.server_id = len(self.__class__.instances)
+        self.server_id = len(self.instances)
         self.friendly_name = friendly_name
         self.ip_string = "0.0.0.0"
         self.dns = "NONE"
 
     def add_to_rotation(self) -> None:
         """Adds the server's IP to the cluster's subdomain."""
-        fqdn = self.subdomain + "." + self.__class__.zone.name
+        fqdn = self.subdomain + "." + self.zone.name
 
         # If records could simply be added & removed, this would make the
         # UI behave better with synchronous post requests.
         # Instead we have to rewrite the whole record.
 
         ips: list = []
-        for record in self.__class__.records:
+        for record in self.records:
             if fqdn == record.name:
                 ips = record.records[:]
                 break
@@ -72,7 +73,7 @@ class Server(Cluster):
                                     aws_secret_access_key=AWS_ACCESS_SECRET)
 
         changes = boto.route53.record.ResourceRecordSets(conn, # type: ignore
-                                                         self.__class__.zone.id)
+                                                         self.zone.id)
         change = changes.add_change("UPSERT", fqdn, "A")
 
         for ip_address in set(ips):
@@ -82,10 +83,10 @@ class Server(Cluster):
 
     def remove_from_rotation(self) -> None:
         """Removes the server's IP from the DNS record."""
-        fqdn = self.subdomain + "." + self.__class__.zone.name
+        fqdn = self.subdomain + "." + self.zone.name
 
         ips: list = []
-        for record in self.__class__.records:
+        for record in self.records:
             if fqdn == record.name:
                 ips = record.records[:]
                 break
@@ -99,7 +100,7 @@ class Server(Cluster):
                                     aws_secret_access_key=AWS_ACCESS_SECRET)
 
         changes = boto.route53.record.ResourceRecordSets(conn, # type: ignore
-                                                         self.__class__.zone.id)
+                                                         self.zone.id)
 
         # This should be simple, but seemingly the API complains unless
         # it's updated in this arduous fashion.
@@ -124,8 +125,9 @@ def dns() -> list:
 
     zone = list(conn.list_hosted_zones())[0]
     records = [record for record in zone.record_sets]
-    records = list(filter(lambda x: x.rrset_type == "A", records))
-    records = list(filter(lambda x: x.name != zone.name, records))
+
+    records = [r for r in zone.record_sets \
+               if (r.rrset_type == "A" and r.name != zone.name)]
 
     Cluster.zone = zone
     Cluster.records = records
@@ -172,7 +174,7 @@ def print_servers() -> None:
 
 def print_dns(dns_records: list) -> None:
     """ASCII analogy of the DNS UI."""
-    print("\n\033[1mDomain\t\t\t IP(s)\t\t Server(s)\t Cluster\033[0m")
+    print("\n\033[1mDomain\t\t\t\t\t IP(s)\t\t Server(s)\t Cluster\033[0m")
     for record in dns_records:
         matching_servers = []
         for server in Server.instances:
