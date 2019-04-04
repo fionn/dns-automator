@@ -2,7 +2,9 @@
 
 import flask
 import werkzeug
-from .dns.dns import Cluster, Server, dns, update_server_dns, create_instances
+
+from .server_admin.dns import Cluster, Server, assign_dns, update_server_dns, \
+                              create_instances
 
 BP = flask.Blueprint("views", __name__, url_prefix="/")
 
@@ -26,20 +28,21 @@ def index() -> flask.signals.template_rendered:
 
 @APP.route("/servers")
 def servers_ui() -> flask.signals.template_rendered:
-    """renders the server UI"""
-    update_server_dns(dns())
+    """Renders the server UI"""
+    update_server_dns(assign_dns())
     servers = Server.instances
     return flask.render_template("servers.html", title="Servers", servers=servers)
 
 @APP.route("/dns")
 def dns_ui() -> flask.signals.template_rendered:
-    """renders the DNS UI"""
+    """Renders the DNS UI"""
     return flask.render_template("dns.html", title="DNS", zone=Cluster.zone,
-                                 servers=Server.instances, dns_records=dns())
+                                 servers=Server.instances,
+                                 dns_records=assign_dns())
 
 @APP.route("/rotate", methods=["GET", "POST"])
 def rotate() -> werkzeug.wrappers.Response:
-    """ Moves the server(s) into / out of DNS rotation """
+    """Moves the server(s) into / out of DNS rotation"""
     if flask.request.method == "POST":
         action = flask.request.form.get("action")
         server_id = int(flask.request.form.get("server")) # type: ignore
@@ -63,9 +66,9 @@ def rotate() -> werkzeug.wrappers.Response:
     return flask.redirect("/servers")
 
 def main() -> None:
-    """main view function"""
+    """Main view function"""
     create_instances()
-    records = dns()
+    records = assign_dns()
     update_server_dns(records)
     #print_servers()
     #print_dns(records)

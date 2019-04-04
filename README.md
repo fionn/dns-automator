@@ -12,7 +12,7 @@ The application expects AWS API secrets as the environment variables `AWS_ACCESS
 
 Run with `./run.py` or `flask run` to serve the web interface in development mode on `localhost:5000` with Flask. To serve with `gunicorn` on `localhost:8000`, run the command in `Procfile`. Simulate a deployment with `heroku local`.
 
-Some toy data is created in `dns.create_instances`.
+Some toy data is created by `dns.create_instances`.
 
 ### Deploy
 

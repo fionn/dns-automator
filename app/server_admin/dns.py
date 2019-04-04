@@ -5,7 +5,7 @@ import os
 from typing import List
 
 import boto
-import route53 # type: ignore
+import route53
 
 AWS_ACCESS_ID = os.environ["AWS_ACCESS_ID"]
 AWS_ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
@@ -23,6 +23,9 @@ class Cluster():
         self.cluster_id = cluster_id
         self.cluster_name = self._name()
         self.subdomain = self._subdomain()
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}(cluster_id={self.cluster_id})>"
 
     def _name(self) -> str:
         name_dict = {1: "Los Angeles",
@@ -72,8 +75,7 @@ class Server(Cluster):
         conn = boto.connect_route53(aws_access_key_id=AWS_ACCESS_ID,
                                     aws_secret_access_key=AWS_ACCESS_SECRET)
 
-        changes = boto.route53.record.ResourceRecordSets(conn, # type: ignore
-                                                         self.zone.id)
+        changes = boto.route53.record.ResourceRecordSets(conn, self.zone.id)
         change = changes.add_change("UPSERT", fqdn, "A")
 
         for ip_address in set(ips):
@@ -99,8 +101,7 @@ class Server(Cluster):
         conn = boto.connect_route53(aws_access_key_id=AWS_ACCESS_ID,
                                     aws_secret_access_key=AWS_ACCESS_SECRET)
 
-        changes = boto.route53.record.ResourceRecordSets(conn, # type: ignore
-                                                         self.zone.id)
+        changes = boto.route53.record.ResourceRecordSets(conn, self.zone.id)
 
         # This should be simple, but seemingly the API complains unless
         # it's updated in this arduous fashion.
@@ -115,7 +116,7 @@ class Server(Cluster):
 
         changes.commit()
 
-def dns() -> list:
+def assign_dns() -> list:
     """Grabs all A records for the hosted zone
     and assigns them to class variables"""
     print("Fetching DNS A records... ", end="", flush=True)
@@ -138,10 +139,9 @@ def dns() -> list:
 
 def create_instances() -> None:
     """Instantiates clusters and their servers"""
+    clusters = []
     for i in range(1, Cluster.n + 1):
-        Cluster(i)
-
-    clusters = Cluster.instances
+        clusters.append(Cluster(i))
 
     la1 = clusters[0].create_server("la1")
     ny1 = clusters[1].create_server("ny1")
@@ -166,14 +166,14 @@ def update_server_dns(dns_records: list) -> None:
                 server.dns = record.name
 
 def print_servers() -> None:
-    """ASCII analogy of the server UI."""
+    """ASCII analogy of the server UI"""
     print("\n\033[1mID\t Name\t Cluster\t DNS\t\t\t IP\033[0m")
     for server in Server.instances:
         print(server.server_id, "\t", server.friendly_name, "\t",
               server.cluster_name, "\t", server.dns, "\t", server.ip_string)
 
 def print_dns(dns_records: list) -> None:
-    """ASCII analogy of the DNS UI."""
+    """ASCII analogy of the DNS UI"""
     print("\n\033[1mDomain\t\t\t\t\t IP(s)\t\t Server(s)\t Cluster\033[0m")
     for record in dns_records:
         matching_servers = []
@@ -187,7 +187,7 @@ def print_dns(dns_records: list) -> None:
 def main() -> None:
     """Entry point"""
     create_instances()
-    records = dns()
+    records = assign_dns()
     update_server_dns(records)
 
     print_servers()
