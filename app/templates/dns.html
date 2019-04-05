@@ -6,14 +6,14 @@
     <h1>DNS Entries</h1>
 
     <p>
-        Showing all A records for subdomains on {{ zone.name[:-1] }} and matching them to our servers, if possible.
+        Showing all A records on {{ zone_name[:-1] }} and matching them to our servers, if possible.
     </p>
 
     <table class="table table-hover">
         <thead>
             <tr>
                 <th>Domain String</th>
-                <th>IP(s)</th>
+                <th>IP Address Record(s)</th>
                 <th>Server Friendly Name(s)</th>
                 <th>Cluster</th>
             </tr>
@@ -23,7 +23,7 @@
 
             {%- set highlight = {'yes': True} %}
             {%- for server in servers -%}
-            {%- if server.ip_string in record.records -%}
+            {%- if server.ip_address.exploded in record.records -%}
                 {%- if highlight.update({'yes': False}) -%} {%- endif -%}
             {%- endif -%}
             {%- endfor -%}
@@ -41,15 +41,15 @@
                 </td>
                 <td>
                     {%- for server in servers -%}
-                        {%- if server.ip_string in record.records -%}
-                        <span class="friendly_name"><code>{{ server.friendly_name }}</code></span>
+                        {%- if server.ip_address.exploded in record.records -%}
+                        <span class="friendly_name"><code>{{ server.name }}</code></span>
                         {%- endif -%}
                     {%- endfor -%}
                 </td>
                 <td>
                     {%- set clusterlist = [] -%}
                     {%- for server in servers -%}
-                        {%- if server.ip_string in record.records -%}
+                        {%- if server.ip_address.exploded in record.records -%}
                             {%- if clusterlist.append(server.cluster_name) -%} {%- endif -%}
                         {%- endif -%}
                     {%- endfor -%}

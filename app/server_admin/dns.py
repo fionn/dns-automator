@@ -2,63 +2,95 @@
 """DNS logic"""
 
 import os
-from typing import List
+import ipaddress
+from typing import List, NamedTuple
 
 import boto
 import route53
 
-AWS_ACCESS_ID = os.environ["AWS_ACCESS_ID"]
-AWS_ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
+AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
+AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+
+NameDomain = NamedTuple("NameSubdomain", [("name", str), ("subdomain", str)])
+
+Infrastructure = NamedTuple("Infrastructure", [("clusters", List["Cluster"]),
+                                               ("servers", List["Server"])])
+
+CLUSTER_MAP = {1: NameDomain("Los Angeles", "la"),
+               2: NameDomain("New York", "nyc"),
+               3: NameDomain("Frankfurt", "fra"),
+               4: NameDomain("Hong Kong", "hk"),
+               5: NameDomain("Tokyo", "tyo"),
+               6: NameDomain("Dublin", "dub")}
 
 # pylint: disable=too-few-public-methods
-class Cluster():
-    """A class for cluster objects"""
-    instances: List["Cluster"] = []
-    records: List["route53.resource_record_set.AResourceRecordSet"] = []
-    zone: "route53.hosted_zone.HostedZone" = None
-    n = 4 # Number of unique clusters
+class Server:
+    """Server dataclass"""
 
-    def __init__(self, cluster_id: int) -> None:
-        self.instances.append(self)
+    # pylint: disable=too-many-arguments
+    def __init__(self, server_id: int, name: str,
+                 cluster_id: int, cluster_name: str,
+                 ip: ipaddress.IPv4Address) -> None:
         self.cluster_id = cluster_id
-        self.cluster_name = self._name()
-        self.subdomain = self._subdomain()
+        self.cluster_name = cluster_name
+        self.server_id = server_id
+        self.name = name
+        self.ip_address = ip
+        self.dns = None
+
+    def __repr__(self) -> str:
+        return "<{}(server_id={}, name={}, cluster_id={}, cluster_name={}, ip={})>" \
+                .format(type(self).__name__, self.server_id, self.name,
+                        self.cluster_id, self.cluster_name, self.ip_address)
+
+    def __str__(self) -> str:
+        return f"<{self.cluster_name}({self.server_id}, {self.name})"
+
+# pylint: disable=too-few-public-methods
+class Cluster:
+    """A class for cluster objects"""
+
+    def __init__(self, cluster_id: int, cluster_name: str,
+                 subdomain: str) -> None:
+        self.cluster_id = cluster_id
+        self.cluster_name = cluster_name
+        self.subdomain = subdomain
+        self.server_instances: List[Server] = []
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}(cluster_id={self.cluster_id})>"
 
-    def _name(self) -> str:
-        name_dict = {1: "Los Angeles",
-                     2: "New York",
-                     3: "Frankfurt",
-                     4: "Hong Kong"}
-        return name_dict[self.cluster_id]
-
-    def _subdomain(self) -> str:
-        subdomain_dict = {"Los Angeles": "la",
-                          "New York": "nyc",
-                          "Frankfurt": "fra",
-                          "Hong Kong": "hk"}
-        return subdomain_dict[self.cluster_name]
-
-    def create_server(self, server_name: str) -> "Server":
+    def create_server(self, server_id: int, server_name: str,
+                      server_ip: ipaddress.IPv4Address) -> Server:
         """Factory method for server creation"""
-        return Server(self.cluster_id, server_name)
+        server = Server(server_id=server_id,
+                        name=server_name,
+                        cluster_id=self.cluster_id,
+                        cluster_name=self.cluster_name,
+                        ip=server_ip)
+        self.server_instances.append(server)
+        return server
 
-class Server(Cluster):
-    """Cluster child class"""
-    instances: list = []
+class Zone:
+    """Zone container"""
 
-    def __init__(self, cluster_id: int, friendly_name: str) -> None:
-        super().__init__(cluster_id)
-        self.server_id = len(self.instances)
-        self.friendly_name = friendly_name
-        self.ip_string = "0.0.0.0"
-        self.dns = "NONE"
+    def __init__(self) -> None:
+        # Gotta consolidate these route53 APIs.
+        aws_credentials = {"aws_access_key_id": AWS_ACCESS_KEY_ID,
+                           "aws_secret_access_key": AWS_SECRET_ACCESS_KEY}
+        _r53_conn = route53.connect(**aws_credentials)
+        self._conn = boto.connect_route53(**aws_credentials)
+        self.zone = list(_r53_conn.list_hosted_zones())[0]
 
-    def add_to_rotation(self) -> None:
+    @property
+    def records(self) -> list:
+        """Flexible record property"""
+        return [r for r in self.zone.record_sets \
+                if (r.rrset_type == "A" and r.name != self.zone.name)]
+
+    def add_server(self, server: Server) -> None:
         """Adds the server's IP to the cluster's subdomain."""
-        fqdn = self.subdomain + "." + self.zone.name
+        fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.zone.name
 
         # If records could simply be added & removed, this would make the
         # UI behave better with synchronous post requests.
@@ -70,38 +102,33 @@ class Server(Cluster):
                 ips = record.records[:]
                 break
 
-        ips.append(self.ip_string)
+        ips.append(server.ip_address)
 
-        conn = boto.connect_route53(aws_access_key_id=AWS_ACCESS_ID,
-                                    aws_secret_access_key=AWS_ACCESS_SECRET)
-
-        changes = boto.route53.record.ResourceRecordSets(conn, self.zone.id)
+        changes = boto.route53.record.ResourceRecordSets(self._conn, self.zone.id)
         change = changes.add_change("UPSERT", fqdn, "A")
 
         for ip_address in set(ips):
             change.add_value(ip_address)
 
         changes.commit()
+        server.dns = fqdn
 
-    def remove_from_rotation(self) -> None:
+    def remove_server(self, server: Server) -> None:
         """Removes the server's IP from the DNS record."""
-        fqdn = self.subdomain + "." + self.zone.name
+        fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.zone.name
 
         ips: list = []
         for record in self.records:
             if fqdn == record.name:
-                ips = record.records[:]
+                ips = [ipaddress.ip_address(r) for r in record.records[:]]
                 break
 
-        if self.ip_string not in ips:
+        if server.ip_address not in ips:
             return
 
-        ips = list(filter(lambda x: x != self.ip_string, ips))
+        ips = list(filter(lambda x: x != server.ip_address, ips))
 
-        conn = boto.connect_route53(aws_access_key_id=AWS_ACCESS_ID,
-                                    aws_secret_access_key=AWS_ACCESS_SECRET)
-
-        changes = boto.route53.record.ResourceRecordSets(conn, self.zone.id)
+        changes = boto.route53.record.ResourceRecordSets(self._conn, self.zone.id)
 
         # This should be simple, but seemingly the API complains unless
         # it's updated in this arduous fashion.
@@ -112,86 +139,72 @@ class Server(Cluster):
                 change.add_value(ip_address)
         else:
             change = changes.add_change("DELETE", fqdn, "A")
-            change.add_value(self.ip_string)
+            change.add_value(server.ip_address)
 
         changes.commit()
+        server.dns = None
 
-def assign_dns() -> list:
-    """Grabs all A records for the hosted zone
-    and assigns them to class variables"""
-    print("Fetching DNS A records... ", end="", flush=True)
-
-    conn = route53.connect(aws_access_key_id=AWS_ACCESS_ID,
-                           aws_secret_access_key=AWS_ACCESS_SECRET)
-
-    zone = list(conn.list_hosted_zones())[0]
-    records = [record for record in zone.record_sets]
-
-    records = [r for r in zone.record_sets \
-               if (r.rrset_type == "A" and r.name != zone.name)]
-
-    Cluster.zone = zone
-    Cluster.records = records
-
-    print("done")
-
-    return records
-
-def create_instances() -> None:
+def create_infrastructure() -> Infrastructure:
     """Instantiates clusters and their servers"""
     clusters = []
-    for i in range(1, Cluster.n + 1):
-        clusters.append(Cluster(i))
+    for cluster_id, ident in CLUSTER_MAP.items():
+        clusters.append(Cluster(cluster_id, ident.name, ident.subdomain))
 
-    la1 = clusters[0].create_server("la1")
-    ny1 = clusters[1].create_server("ny1")
-    fr1 = clusters[2].create_server("fr1")
-    hk1 = clusters[3].create_server("hk1")
-    hk2 = clusters[3].create_server("hk2")
+    clusters[0].create_server(1, "la-1", ipaddress.ip_address("2.4.6.8"))
+    clusters[1].create_server(2, "nyc-1", ipaddress.ip_address("1.0.1.1"))
+    clusters[2].create_server(3, "fra-1", ipaddress.ip_address("5.6.7.8"))
+    clusters[3].create_server(4, "hk-1", ipaddress.ip_address("4.3.2.1"))
+    clusters[3].create_server(5, "hk-2", ipaddress.ip_address("1.2.3.4"))
+    clusters[3].create_server(6, "hk-3", ipaddress.ip_address("1.2.3.5"))
+    clusters[3].create_server(7, "hk-4", ipaddress.ip_address("1.2.3.6"))
+    clusters[4].create_server(8, "tyo-1", ipaddress.ip_address("8.1.1.1"))
+    clusters[5].create_server(9, "dub-1", ipaddress.ip_address("9.1.1.1"))
 
-    la1.ip_string = "2.4.6.8"
-    ny1.ip_string = "1.1.1.1"
-    fr1.ip_string = "5.6.7.8"
-    hk1.ip_string = "4.3.2.1"
-    hk2.ip_string = "1.2.3.4"
+    servers = []
+    for cluster in clusters:
+        for server in cluster.server_instances:
+            servers.append(server)
 
-    Server.instances.sort(key=lambda x: x.friendly_name)
+    servers.sort(key=lambda x: x.name)
 
-def update_server_dns(dns_records: list) -> None:
-    """Assigns to each server instance their DNS record name"""
-    for server in Server.instances:
-        server.dns = "NONE"
-        for record in dns_records:
-            if server.ip_string in record.records:
-                server.dns = record.name
+    return Infrastructure(clusters, servers)
 
-def print_servers() -> None:
+def print_servers(server_instances: List[Server]) -> None:
     """ASCII analogy of the server UI"""
-    print("\n\033[1mID\t Name\t Cluster\t DNS\t\t\t IP\033[0m")
-    for server in Server.instances:
-        print(server.server_id, "\t", server.friendly_name, "\t",
-              server.cluster_name, "\t", server.dns, "\t", server.ip_string)
+    print("\n\033[1mID\t Name\t Cluster\t IP\t\t DNS\033[0m")
+    for server in server_instances:
+        print(server.server_id, "\t", server.name, "\t",
+              CLUSTER_MAP[server.cluster_id].name, "\t",
+              server.ip_address, server.dns)
 
-def print_dns(dns_records: list) -> None:
+def print_dns(dns_records: list, server_instances: List[Server]) -> None:
     """ASCII analogy of the DNS UI"""
     print("\n\033[1mDomain\t\t\t\t\t IP(s)\t\t Server(s)\t Cluster\033[0m")
     for record in dns_records:
         matching_servers = []
-        for server in Server.instances:
-            if server.ip_string in record.records:
+        for server in server_instances:
+            if server.ip_address.exploded in record.records:
                 matching_servers.append(server)
         print(record.name, "\t", record.records, "\t",
-              [server.friendly_name for server in matching_servers], "\t",
-              [server.cluster_name for server in matching_servers])
+              [server.name for server in matching_servers], "\t",
+              [CLUSTER_MAP[server.cluster_id].name for server in matching_servers])
+
+def update_servers(records: list, servers: List[Server]) -> None:
+    """Assigns to each server instance their DNS record name"""
+    for server in servers:
+        server.dns = None
+        for record in records:
+            if server.ip_address.exploded in record.records:
+                server.dns = record.name
 
 def main() -> None:
     """Entry point"""
-    create_instances()
-    records = assign_dns()
-    update_server_dns(records)
+    zone = Zone()
+    infrastructure = create_infrastructure()
+    update_servers(zone.records, infrastructure.servers)
 
-    print_servers()
-    print_dns(records)
+    print_servers(infrastructure.servers)
+    print_dns(zone.records, infrastructure.servers)
 
 if __name__ == "__main__":
     main()

@@ -3,12 +3,13 @@
 import flask
 import werkzeug
 
-from .server_admin.dns import Cluster, Server, assign_dns, update_server_dns, \
-                              create_instances
+from .server_admin import dns
 
 BP = flask.Blueprint("views", __name__, url_prefix="/")
-
 APP = flask.current_app
+
+INFRASTRUCTURE = dns.create_infrastructure()
+ZONE = dns.Zone()
 
 @APP.route("/")
 @APP.route("/index")
@@ -29,16 +30,16 @@ def index() -> flask.signals.template_rendered:
 @APP.route("/servers")
 def servers_ui() -> flask.signals.template_rendered:
     """Renders the server UI"""
-    update_server_dns(assign_dns())
-    servers = Server.instances
+    servers = INFRASTRUCTURE.servers
+    dns.update_servers(ZONE.records, servers)
     return flask.render_template("servers.html", title="Servers", servers=servers)
 
 @APP.route("/dns")
 def dns_ui() -> flask.signals.template_rendered:
     """Renders the DNS UI"""
-    return flask.render_template("dns.html", title="DNS", zone=Cluster.zone,
-                                 servers=Server.instances,
-                                 dns_records=assign_dns())
+    return flask.render_template("dns.html", title="DNS", zone_name=ZONE.zone.name,
+                                 servers=INFRASTRUCTURE.servers,
+                                 dns_records=ZONE.records)
 
 @APP.route("/rotate", methods=["GET", "POST"])
 def rotate() -> werkzeug.wrappers.Response:
@@ -47,30 +48,22 @@ def rotate() -> werkzeug.wrappers.Response:
         action = flask.request.form.get("action")
         server_id = int(flask.request.form.get("server")) # type: ignore
 
-        for server in Server.instances:
+        for server in INFRASTRUCTURE.servers:
             if server.server_id == server_id:
                 if action == "add":
-                    flask.flash("Added server " + server.friendly_name + \
-                                " to DNS A record " + server.subdomain + \
-                                "." + server.zone.name)
-                    APP.logger.info("add %s", server.friendly_name)
-                    server.add_to_rotation()
+                    flask.flash("Added server " + server.name + \
+                                " to DNS A record "
+                                + dns.CLUSTER_MAP[server.cluster_id].subdomain
+                                + "." + ZONE.zone.name)
+                    APP.logger.info("add %s", server.name)
+                    ZONE.add_server(server)
                 elif action == "remove":
-                    flask.flash("Removed server " + server.friendly_name + \
-                                " from DNS A record " + server.subdomain + \
-                                "." + server.zone.name)
-                    APP.logger.info("remove %s", server.friendly_name)
-                    server.remove_from_rotation()
+                    flask.flash("Removed server " + server.name + \
+                                " from DNS A record "
+                                +  dns.CLUSTER_MAP[server.cluster_id].subdomain
+                                + "." + ZONE.zone.name)
+                    APP.logger.info("remove %s", server.name)
+                    ZONE.remove_server(server)
                 break
 
     return flask.redirect("/servers")
-
-def main() -> None:
-    """Main view function"""
-    create_instances()
-    records = assign_dns()
-    update_server_dns(records)
-    #print_servers()
-    #print_dns(records)
-
-main()

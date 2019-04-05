@@ -33,6 +33,7 @@
             <tr>
                 <th>ID</th>
                 <th>Server Friendly Name&nbsp;&#x25BC;</th>
+                <th>Server IP Address</th>
                 <th>Cluster</th>
                 <th>DNS</th>
                 <th>Rotation</th>
@@ -42,13 +43,14 @@
             {% for server in servers -%}
             <tr>
                 <td>{{ server.server_id }}</td>
-                <td><code>{{ server.friendly_name }}</code></td>
+                <td><code>{{ server.name }}</code></td>
+                <td><code>{{ server.ip_address.exploded }}</code></td>
                 <td>{{ server.cluster_name }}</td>
-                <td>{{ server.dns}}</td>
+                <td>{{ server.dns.__str__() }}</td>
                 <td>
                     <form action="/rotate" method="post">
                     <input type='hidden' name='server' value='{{ server.server_id }}'>
-                    {%- if server.dns != "NONE" %} 
+                    {%- if server.dns != None %} 
                     <input type='hidden' name='action' value='remove'>
                     <button type="submit" class="btn btn-sm btn-danger">Remove</button>
                     {% else %}

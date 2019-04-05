@@ -1,6 +1,6 @@
-# Automatically Managed DNS
+# Managed DNS
 
-A system to automate the management of DNS A records for an arbitrary number of servers.
+A system to ease the management of DNS A records for an arbitrary number of servers.
 
 ## Run
 
@@ -8,11 +8,11 @@ A system to automate the management of DNS A records for an arbitrary number of 
 
 Clone, set up a virtual environment with `make venv` and enter it with `source venv/bin/activate`.
 
-The application expects AWS API secrets as the environment variables `AWS_ACCESS_ID`, `AWS_ACCESS_SECRET` and a pseudo-random `SECRET_KEY`.
+The application expects AWS API secrets as the environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and a pseudo-random `SECRET_KEY` for Flask.
 
-Run with `./run.py` or `flask run` to serve the web interface in development mode on `localhost:5000` with Flask. To serve with `gunicorn` on `localhost:8000`, run the command in `Procfile`. Simulate a deployment with `heroku local`.
+Run with `./run.py` or `flask run` to serve the web interface in development mode on `localhost:5000` with Flask. To serve with `gunicorn` on `localhost:8000`, run the command in the `Procfile`.
 
-Some toy data is created by `dns.create_instances`.
+Some toy data is created by `app.server_admin.create_infrastructure`.
 
 ### Deploy
 
