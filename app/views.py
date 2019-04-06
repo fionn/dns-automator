@@ -37,9 +37,10 @@ def servers_ui() -> flask.signals.template_rendered:
 @APP.route("/dns")
 def dns_ui() -> flask.signals.template_rendered:
     """Renders the DNS UI"""
-    return flask.render_template("dns.html", title="DNS", zone_name=ZONE.zone.name,
+    return flask.render_template("dns.html", title="DNS", zone_name=ZONE.name,
                                  servers=INFRASTRUCTURE.servers,
-                                 dns_records=ZONE.records)
+                                 dns_records=ZONE.records,
+                                 ips_from_record=ZONE.ips_from_record)
 
 @APP.route("/rotate", methods=["GET", "POST"])
 def rotate() -> werkzeug.wrappers.Response:
@@ -54,14 +55,14 @@ def rotate() -> werkzeug.wrappers.Response:
                     flask.flash("Added server " + server.name + \
                                 " to DNS A record "
                                 + dns.CLUSTER_MAP[server.cluster_id].subdomain
-                                + "." + ZONE.zone.name)
+                                + "." + ZONE.name)
                     APP.logger.info("add %s", server.name)
                     ZONE.add_server(server)
                 elif action == "remove":
                     flask.flash("Removed server " + server.name + \
                                 " from DNS A record "
                                 +  dns.CLUSTER_MAP[server.cluster_id].subdomain
-                                + "." + ZONE.zone.name)
+                                + "." + ZONE.name)
                     APP.logger.info("remove %s", server.name)
                     ZONE.remove_server(server)
                 break

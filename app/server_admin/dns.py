@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 """DNS logic"""
 
-import os
 import ipaddress
-from typing import List, NamedTuple
+from dataclasses import dataclass
+from typing import Set, List, NamedTuple, Optional
 
-import boto
-import route53
-
-AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
-AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+import boto3
 
 NameDomain = NamedTuple("NameSubdomain", [("name", str), ("subdomain", str)])
-
 Infrastructure = NamedTuple("Infrastructure", [("clusters", List["Cluster"]),
                                                ("servers", List["Server"])])
 
@@ -24,27 +19,18 @@ CLUSTER_MAP = {1: NameDomain("Los Angeles", "la"),
                6: NameDomain("Dublin", "dub")}
 
 # pylint: disable=too-few-public-methods
+@dataclass
 class Server:
     """Server dataclass"""
-
-    # pylint: disable=too-many-arguments
-    def __init__(self, server_id: int, name: str,
-                 cluster_id: int, cluster_name: str,
-                 ip: ipaddress.IPv4Address) -> None:
-        self.cluster_id = cluster_id
-        self.cluster_name = cluster_name
-        self.server_id = server_id
-        self.name = name
-        self.ip_address = ip
-        self.dns = None
-
-    def __repr__(self) -> str:
-        return "<{}(server_id={}, name={}, cluster_id={}, cluster_name={}, ip={})>" \
-                .format(type(self).__name__, self.server_id, self.name,
-                        self.cluster_id, self.cluster_name, self.ip_address)
+    server_id: int
+    name: str
+    cluster_id: int
+    cluster_name: str
+    ip_address: ipaddress.IPv4Address
+    dns: Optional[str] = None
 
     def __str__(self) -> str:
-        return f"<{self.cluster_name}({self.server_id}, {self.name})"
+        return self.name
 
 # pylint: disable=too-few-public-methods
 class Cluster:
@@ -67,7 +53,7 @@ class Cluster:
                         name=server_name,
                         cluster_id=self.cluster_id,
                         cluster_name=self.cluster_name,
-                        ip=server_ip)
+                        ip_address=server_ip)
         self.server_instances.append(server)
         return server
 
@@ -75,73 +61,87 @@ class Zone:
     """Zone container"""
 
     def __init__(self) -> None:
-        # Gotta consolidate these route53 APIs.
-        aws_credentials = {"aws_access_key_id": AWS_ACCESS_KEY_ID,
-                           "aws_secret_access_key": AWS_SECRET_ACCESS_KEY}
-        _r53_conn = route53.connect(**aws_credentials)
-        self._conn = boto.connect_route53(**aws_credentials)
-        self.zone = list(_r53_conn.list_hosted_zones())[0]
+        self.r53 = boto3.client("route53")
+        hosted_zone = self.r53.list_hosted_zones()["HostedZones"][0]
+        # pylint: disable=invalid-name
+        self.id = hosted_zone["Id"].split("/")[-1]
+        self.name = hosted_zone["Name"]
 
     @property
-    def records(self) -> list:
+    def records(self) -> List[dict]:
         """Flexible record property"""
-        return [r for r in self.zone.record_sets \
-                if (r.rrset_type == "A" and r.name != self.zone.name)]
+        record_sets = self.r53 \
+                      .list_resource_record_sets(HostedZoneId=self.id) \
+                      ["ResourceRecordSets"]
+        return [r for r in record_sets \
+                if (r["Type"] == "A" and r["Name"] != self.name)]
+
+    @staticmethod
+    def ips_from_record(record: dict) -> Set[ipaddress.IPv4Address]:
+        """Helper to get IP addresses from a given record"""
+        ips = set()
+        for value in record["ResourceRecords"]:
+            ips.add(ipaddress.ip_address(value["Value"]))
+        return ips
+
+    def _a_record(self, name: str, ips: Set[ipaddress.IPv4Address],
+                  action: str, ttl: int = 600) -> None:
+        change_batch = {
+            "Comment": "add {} -> {}"
+                       .format(name, ", ".join([ip.exploded for ip in ips])),
+            "Changes": [
+                {
+                    "Action": action,
+                    "ResourceRecordSet": {
+                        "Name": name,
+                        "Type": "A",
+                        "TTL": ttl,
+                        "ResourceRecords": [{"Value": ip.exploded}
+                                            for ip in ips]
+                    }
+                }
+            ]
+        }
+
+        self.r53.change_resource_record_sets(HostedZoneId=self.id,
+                                             ChangeBatch=change_batch)
 
     def add_server(self, server: Server) -> None:
         """Adds the server's IP to the cluster's subdomain."""
-        fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.zone.name
+        fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.name
 
-        # If records could simply be added & removed, this would make the
-        # UI behave better with synchronous post requests.
-        # Instead we have to rewrite the whole record.
-
-        ips: list = []
+        ips: Set[ipaddress.IPv4Address] = set()
         for record in self.records:
-            if fqdn == record.name:
-                ips = record.records[:]
+            if fqdn == record["Name"]:
+                ips = self.ips_from_record(record)
                 break
 
-        ips.append(server.ip_address)
+        ips.add(server.ip_address)
 
-        changes = boto.route53.record.ResourceRecordSets(self._conn, self.zone.id)
-        change = changes.add_change("UPSERT", fqdn, "A")
-
-        for ip_address in set(ips):
-            change.add_value(ip_address)
-
-        changes.commit()
+        self._a_record(fqdn, ips, "UPSERT")
         server.dns = fqdn
 
     def remove_server(self, server: Server) -> None:
         """Removes the server's IP from the DNS record."""
-        fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.zone.name
+        fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.name
 
-        ips: list = []
+        ips: Set[ipaddress.IPv4Address] = set()
         for record in self.records:
-            if fqdn == record.name:
-                ips = [ipaddress.ip_address(r) for r in record.records[:]]
+            if fqdn == record["Name"]:
+                ips = self.ips_from_record(record)
                 break
 
         if server.ip_address not in ips:
             return
 
-        ips = list(filter(lambda x: x != server.ip_address, ips))
-
-        changes = boto.route53.record.ResourceRecordSets(self._conn, self.zone.id)
-
-        # This should be simple, but seemingly the API complains unless
-        # it's updated in this arduous fashion.
+        ips = set(filter(lambda x: x != server.ip_address, ips))
 
         if ips:
-            change = changes.add_change("UPSERT", fqdn, "A")
-            for ip_address in set(ips):
-                change.add_value(ip_address)
+            self._a_record(fqdn, ips, "UPSERT")
         else:
-            change = changes.add_change("DELETE", fqdn, "A")
-            change.add_value(server.ip_address)
+            ips.add(server.ip_address)
+            self._a_record(fqdn, ips, "DELETE")
 
-        changes.commit()
         server.dns = None
 
 def create_infrastructure() -> Infrastructure:
@@ -177,25 +177,26 @@ def print_servers(server_instances: List[Server]) -> None:
               CLUSTER_MAP[server.cluster_id].name, "\t",
               server.ip_address, server.dns)
 
-def print_dns(dns_records: list, server_instances: List[Server]) -> None:
+def print_dns(dns_records: List[dict], server_instances: List[Server]) -> None:
     """ASCII analogy of the DNS UI"""
     print("\n\033[1mDomain\t\t\t\t\t IP(s)\t\t Server(s)\t Cluster\033[0m")
     for record in dns_records:
         matching_servers = []
         for server in server_instances:
-            if server.ip_address.exploded in record.records:
+            if server.ip_address in Zone.ips_from_record(record):
                 matching_servers.append(server)
-        print(record.name, "\t", record.records, "\t",
+        print(record["Name"], "\t", Zone.ips_from_record(record), "\t",
               [server.name for server in matching_servers], "\t",
-              [CLUSTER_MAP[server.cluster_id].name for server in matching_servers])
+              [CLUSTER_MAP[server.cluster_id].name
+               for server in matching_servers])
 
-def update_servers(records: list, servers: List[Server]) -> None:
+def update_servers(records: List[dict], servers: List[Server]) -> None:
     """Assigns to each server instance their DNS record name"""
     for server in servers:
         server.dns = None
         for record in records:
-            if server.ip_address.exploded in record.records:
-                server.dns = record.name
+            if server.ip_address in Zone.ips_from_record(record):
+                server.dns = record["Name"]
 
 def main() -> None:
     """Entry point"""

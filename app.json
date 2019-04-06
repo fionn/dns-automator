@@ -1,19 +1,19 @@
 {
     "name": "DNS Automator",
     "description": "Stub DNS management for Server Admin",
-    "keywords": ["DNS", "route53", "AWS", "Flask"],
+    "keywords": ["DNS", "route53", "AWS", "Flask", "boto3"],
     "repository": "https://github.com/fionn/dns-automator",
     "success_url": "/",
     "env": {
         "SECRET_KEY": {
-            "description": "Secret key for signing cookies",
+            "description": "Secret key for session integrity",
             "generator": "secret"
         },
-        "AWS_ACCESS_ID": {
-            "description": "AWS key ID"
+        "AWS_ACCESS_KEY_ID": {
+            "description": "AWS access key ID"
         },
-        "AWS_ACCESS_SECRET": {
-            "description": "AWS secret token"
+        "AWS_SECRET_ACCESS_KEY": {
+            "description": "AWS secret access key"
         }
     }
 }
