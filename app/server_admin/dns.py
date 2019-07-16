@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 """DNS logic"""
 
-from dataclasses import dataclass
 from ipaddress import ip_address, IPv4Address
-from typing import Set, List, NamedTuple, Optional
+from typing import Set, List, NamedTuple
 
 import boto3
+import flask_sqlalchemy
+
+try:
+    from app.db import DB as db
+except ModuleNotFoundError:
+    # Remove when this module can't be directly invoked any more
+    if __name__ == "__main__":
+        db = flask_sqlalchemy.SQLAlchemy() # pylint: disable=invalid-name
+
+# To do for SQL:
+    # Autoincrement server_id and drop the argument from initialisation
+    # Move db population to a separate file
+    # Reverse cluster map
+    # Make clusters inherit from db.Model also
+    # Find a way to not attach redundant strings, e.g. cluster name
 
 NameDomain = NamedTuple("NameSubdomain", [("name", str), ("subdomain", str)])
 Infrastructure = NamedTuple("Infrastructure", [("clusters", List["Cluster"]),
@@ -27,14 +41,16 @@ SUBDOMAIN_MAP = {"la": "Los Angeles",
                  "sg": "Singapore"}
 
 # pylint: disable=too-few-public-methods
-@dataclass
-class Server:
+class Server(db.Model):
     """Server model"""
-    server_id: int
-    cluster_id: int
-    id_in_cluster: int
-    ip_address: IPv4Address
-    dns: Optional[str] = None
+    server_id = db.Column(db.Integer, primary_key=True)
+    cluster_id = db.Column(db.Integer, nullable=False)
+    id_in_cluster = db.Column(db.Integer, nullable=False)
+    ip_address = db.Column(db.PickleType, nullable=False, unique=True)
+
+    db.UniqueConstraint("cluster_id", "id_in_cluster", name="unique_id_in_cluster")
+
+    dns = db.Column(db.String(120))
 
     @property
     def name(self) -> str:
@@ -126,6 +142,8 @@ class Zone:
     def add_server(self, server: Server) -> None:
         """Adds the server's IP to the cluster's subdomain."""
         fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.name
+        if len(fqdn) > 120:
+            raise RuntimeError(f"fqdn {fqdn} has length greater than 120")
 
         ips: Set[IPv4Address] = set()
         for record in self.records:

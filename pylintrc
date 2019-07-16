@@ -1,0 +1,9 @@
+[BASIC]
+
+good-names=id
+
+[TYPECHECK]
+
+generated-members=SQLAlchemy.*, query
+ignored-classes=scoped_session
+ignored-modules=flask_sqlalchemy
