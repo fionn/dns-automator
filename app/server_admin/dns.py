@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """DNS logic"""
 
-import ipaddress
 from dataclasses import dataclass
+from ipaddress import ip_address, IPv4Address
 from typing import Set, List, NamedTuple, Optional
 
 import boto3
@@ -18,16 +18,33 @@ CLUSTER_MAP = {1: NameDomain("Los Angeles", "la"),
                5: NameDomain("Tokyo", "tyo"),
                6: NameDomain("Dublin", "dub")}
 
+SUBDOMAIN_MAP = {"la": "Los Angeles",
+                 "nyc": "New York",
+                 "fra": "Frankfurt",
+                 "hk": "Hong Kong",
+                 "tyo": "Tokyo",
+                 "dub": "Dublin",
+                 "sg": "Singapore"}
+
 # pylint: disable=too-few-public-methods
 @dataclass
 class Server:
-    """Server dataclass"""
+    """Server model"""
     server_id: int
-    name: str
     cluster_id: int
-    cluster_name: str
-    ip_address: ipaddress.IPv4Address
+    id_in_cluster: int
+    ip_address: IPv4Address
     dns: Optional[str] = None
+
+    @property
+    def name(self) -> str:
+        """Server name"""
+        return "-".join([CLUSTER_MAP[self.cluster_id].subdomain,
+                         str(self.id_in_cluster)])
+    @property
+    def cluster_name(self) -> str:
+        """Cluster name"""
+        return CLUSTER_MAP[self.cluster_id].name
 
     def __str__(self) -> str:
         return self.name
@@ -36,24 +53,25 @@ class Server:
 class Cluster:
     """A class for cluster objects"""
 
-    def __init__(self, cluster_id: int, cluster_name: str,
-                 subdomain: str) -> None:
+    def __init__(self, cluster_id: int, subdomain: str) -> None:
         self.cluster_id = cluster_id
-        self.cluster_name = cluster_name
         self.subdomain = subdomain
         self.server_instances: List[Server] = []
+
+    @property
+    def cluster_name(self) -> str:
+        """Returns the friendly name"""
+        return SUBDOMAIN_MAP[self.subdomain]
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}(cluster_id={self.cluster_id})>"
 
-    def create_server(self, server_id: int, server_name: str,
-                      server_ip: ipaddress.IPv4Address) -> Server:
+    # pylint: disable=invalid-name
+    def create_server(self, server_id: int, ip: IPv4Address) -> Server:
         """Factory method for server creation"""
-        server = Server(server_id=server_id,
-                        name=server_name,
-                        cluster_id=self.cluster_id,
-                        cluster_name=self.cluster_name,
-                        ip_address=server_ip)
+        server = Server(server_id=server_id, cluster_id=self.cluster_id,
+                        id_in_cluster=len(self.server_instances) + 1,
+                        ip_address=ip)
         self.server_instances.append(server)
         return server
 
@@ -63,7 +81,6 @@ class Zone:
     def __init__(self) -> None:
         self.r53 = boto3.client("route53")
         hosted_zone = self.r53.list_hosted_zones()["HostedZones"][0]
-        # pylint: disable=invalid-name
         self.id = hosted_zone["Id"].split("/")[-1]
         self.name = hosted_zone["Name"]
 
@@ -77,14 +94,14 @@ class Zone:
                 if (r["Type"] == "A" and r["Name"] != self.name)]
 
     @staticmethod
-    def ips_from_record(record: dict) -> Set[ipaddress.IPv4Address]:
+    def ips_from_record(record: dict) -> Set[IPv4Address]:
         """Helper to get IP addresses from a given record"""
         ips = set()
         for value in record["ResourceRecords"]:
-            ips.add(ipaddress.ip_address(value["Value"]))
+            ips.add(ip_address(value["Value"]))
         return ips
 
-    def _a_record(self, name: str, ips: Set[ipaddress.IPv4Address],
+    def _a_record(self, name: str, ips: Set[IPv4Address],
                   action: str, ttl: int = 600) -> None:
         change_batch = {
             "Comment": "add {} -> {}"
@@ -110,7 +127,7 @@ class Zone:
         """Adds the server's IP to the cluster's subdomain."""
         fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.name
 
-        ips: Set[ipaddress.IPv4Address] = set()
+        ips: Set[IPv4Address] = set()
         for record in self.records:
             if fqdn == record["Name"]:
                 ips = self.ips_from_record(record)
@@ -125,7 +142,7 @@ class Zone:
         """Removes the server's IP from the DNS record."""
         fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.name
 
-        ips: Set[ipaddress.IPv4Address] = set()
+        ips: Set[IPv4Address] = set()
         for record in self.records:
             if fqdn == record["Name"]:
                 ips = self.ips_from_record(record)
@@ -148,17 +165,17 @@ def create_infrastructure() -> Infrastructure:
     """Instantiates clusters and their servers"""
     clusters = []
     for cluster_id, ident in CLUSTER_MAP.items():
-        clusters.append(Cluster(cluster_id, ident.name, ident.subdomain))
+        clusters.append(Cluster(cluster_id, ident.subdomain))
 
-    clusters[0].create_server(1, "la-1", ipaddress.ip_address("2.4.6.8"))
-    clusters[1].create_server(2, "nyc-1", ipaddress.ip_address("1.0.1.1"))
-    clusters[2].create_server(3, "fra-1", ipaddress.ip_address("5.6.7.8"))
-    clusters[3].create_server(4, "hk-1", ipaddress.ip_address("4.3.2.1"))
-    clusters[3].create_server(5, "hk-2", ipaddress.ip_address("1.2.3.4"))
-    clusters[3].create_server(6, "hk-3", ipaddress.ip_address("1.2.3.5"))
-    clusters[3].create_server(7, "hk-4", ipaddress.ip_address("1.2.3.6"))
-    clusters[4].create_server(8, "tyo-1", ipaddress.ip_address("8.1.1.1"))
-    clusters[5].create_server(9, "dub-1", ipaddress.ip_address("9.1.1.1"))
+    clusters[0].create_server(1, ip=ip_address("2.4.6.8"))
+    clusters[1].create_server(2, ip=ip_address("1.0.1.1"))
+    clusters[2].create_server(3, ip=ip_address("5.6.7.8"))
+    clusters[3].create_server(4, ip=ip_address("4.3.2.1"))
+    clusters[3].create_server(5, ip=ip_address("1.2.3.4"))
+    clusters[3].create_server(6, ip=ip_address("1.2.3.5"))
+    clusters[3].create_server(7, ip=ip_address("1.2.3.6"))
+    clusters[4].create_server(8, ip=ip_address("8.1.1.1"))
+    clusters[5].create_server(9, ip=ip_address("9.1.1.1"))
 
     servers = []
     for cluster in clusters:

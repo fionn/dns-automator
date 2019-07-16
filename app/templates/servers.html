@@ -52,10 +52,10 @@
                     <input type='hidden' name='server' value='{{ server.server_id }}'>
                     {%- if server.dns != None %} 
                     <input type='hidden' name='action' value='remove'>
-                    <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                    <button type="submit" class="btn btn-sm btn-danger" onclick="this.disabled=true;">Remove</button>
                     {% else %}
                     <input type='hidden' name='action' value='add'>
-                    <button type="submit" class="btn btn-sm btn-success">Add</button>
+                    <button type="submit" class="btn btn-sm btn-success" onclick="this.disabled=true;">Add</button>
                     {% endif -%}
                     </form>
                 </td>

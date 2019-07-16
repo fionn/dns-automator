@@ -10,7 +10,7 @@ tags: $(SRC)
 
 .PHONY: outdated
 outdated:
-	@(source $(VIRTUAL_ENV)/bin/activate && pip list --outdated)
+	@source $(VIRTUAL_ENV)/bin/activate && pip list --outdated
 
 .PHONY: lint
 lint:
