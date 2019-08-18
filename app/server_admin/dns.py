@@ -102,7 +102,7 @@ class Zone:
         return ips
 
     def _a_record(self, name: str, ips: Set[IPv4Address],
-                  action: str, ttl: int = 600) -> None:
+                  action: str, ttl: int = 30) -> None:
         change_batch = {
             "Comment": "add {} -> {}"
                        .format(name, ", ".join([ip.exploded for ip in ips])),
