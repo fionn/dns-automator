@@ -23,37 +23,22 @@ resource "aws_iam_access_key" "user" {
   pgp_key = "${var.pgp_key}"
 }
 
+data "aws_iam_policy_document" "dns_automator" {
+  statement {
+    actions = [
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets"
+    ]
+    resources = ["arn:aws:route53:::hostedzone/${aws_route53_zone.zone.zone_id}"]
+  }
+  statement {
+    actions   = ["route53:ListHostedZones"]
+    resources = ["*"]
+  }
+}
+
 resource "aws_iam_group_policy" "policy" {
   name   = "route53-dns-automator"
   group  = "${aws_iam_group.group.id}"
-  policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "route53:ChangeResourceRecordSets",
-        "route53:ListResourceRecordSets"
-      ],
-      "Resource": "arn:aws:route53:::hostedzone/${aws_route53_zone.zone.zone_id}",
-      "Condition": {
-        "Bool": {
-          "aws:SecureTransport": "true"
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": "route53:ListHostedZones",
-      "Resource": "*",
-      "Condition": {
-        "Bool": {
-          "aws:SecureTransport": "true"
-        }
-      }
-    }
-  ]
-}
-EOF
+  policy = "${data.aws_iam_policy_document.dns_automator.json}"
 }

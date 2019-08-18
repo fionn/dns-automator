@@ -3,15 +3,18 @@ variable "region" {
 }
 
 variable "profile" {
-  default = "default"
+  default     = "default"
+  description = "aws-cli profile to use for deployment"
 }
 
 variable "pgp_key" {
-  default = "keybase:fionn"
+  default     = "keybase:fionn"
+  description = "Used to encrypt the secret access key"
 }
 
 variable "path" {
-  default = "/application/dns-automator/"
+  default     = "/application/dns-automator/"
+  description = "Namespace for IAM entities"
 }
 
 variable "hosted_zone_domain" {

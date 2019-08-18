@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -Eeuo pipefail
 
 trap tf_destroy ERR
 
@@ -14,6 +14,7 @@ function tf_build {
 }
 
 function main {
+    cd infrastructure/
     tf_build
     local output
     output="$(terraform output --json)"
