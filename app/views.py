@@ -1,15 +1,19 @@
 """Blueprint for views"""
 
+import os
+
 import flask
 import werkzeug
 
 from .server_admin import dns
 
+HOSTED_ZONE_DOMAIN = os.environ["HOSTED_ZONE_DOMAIN"]
+
 BP = flask.Blueprint("views", __name__, url_prefix="/")
 APP = flask.current_app
 
 INFRASTRUCTURE = dns.create_infrastructure()
-ZONE = dns.Zone()
+ZONE = dns.Zone(HOSTED_ZONE_DOMAIN)
 
 @APP.route("/")
 @APP.route("/index")

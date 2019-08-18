@@ -1,5 +1,6 @@
 VIRTUAL_ENV ?= venv
 SRC = app/
+TF = infrastructure/
 
 venv: requirements.txt requirements_dev.txt
 	@python3 -m venv $@
@@ -19,3 +20,9 @@ lint:
 .PHONY: typecheck
 typecheck:
 	@mypy $(SRC)
+
+.PHONY: tf_check
+tf_check:
+	@cd $(TF) && terraform validate
+	@cd $(TF) && terraform fmt --check
+	@tflint $(TF)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """DNS logic"""
 
+import os
 from dataclasses import dataclass
 from ipaddress import ip_address, IPv4Address
 from typing import Set, List, NamedTuple, Optional
@@ -78,11 +79,17 @@ class Cluster:
 class Zone:
     """Zone container"""
 
-    def __init__(self) -> None:
+    def __init__(self, hosted_zone_domain: str) -> None:
         self.r53 = boto3.client("route53")
-        hosted_zone = self.r53.list_hosted_zones()["HostedZones"][0]
-        self.id = hosted_zone["Id"].split("/")[-1]
-        self.name = hosted_zone["Name"]
+        self.name = hosted_zone_domain
+        hosted_zone = self._get_hosted_zone()
+        self.id = hosted_zone["Id"].split("/")[-1] # pylint: disable=invalid-name
+
+    def _get_hosted_zone(self) -> dict:
+        for zone in self.r53.list_hosted_zones()["HostedZones"]:
+            if zone["Name"] == self.name:
+                return zone
+        raise RuntimeError(f"Failed to find hosted zone for {self.name}")
 
     @property
     def records(self) -> List[dict]:
@@ -217,7 +224,7 @@ def update_servers(records: List[dict], servers: List[Server]) -> None:
 
 def main() -> None:
     """Entry point"""
-    zone = Zone()
+    zone = Zone(os.environ["HOSTED_ZONE_DOMAIN"])
     infrastructure = create_infrastructure()
     update_servers(zone.records, infrastructure.servers)
 
