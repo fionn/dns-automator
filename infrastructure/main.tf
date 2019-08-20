@@ -1,26 +1,26 @@
 resource "aws_route53_zone" "zone" {
-  name          = "${var.hosted_zone_domain}"
+  name          = var.hosted_zone_domain
   force_destroy = "true"
 }
 
 resource "aws_iam_user" "user" {
   name = "dns-automator-prod"
-  path = "${var.path}"
+  path = var.path
 }
 
 resource "aws_iam_group" "group" {
   name = "dns-automator"
-  path = "${var.path}"
+  path = var.path
 }
 
 resource "aws_iam_user_group_membership" "membership" {
-  user   = "${aws_iam_user.user.name}"
-  groups = ["${aws_iam_group.group.name}"]
+  user   = aws_iam_user.user.name
+  groups = [aws_iam_group.group.name]
 }
 
 resource "aws_iam_access_key" "user" {
-  user    = "${aws_iam_user.user.name}"
-  pgp_key = "${var.pgp_key}"
+  user    = aws_iam_user.user.name
+  pgp_key = var.pgp_key
 }
 
 data "aws_iam_policy_document" "dns_automator" {
@@ -39,6 +39,6 @@ data "aws_iam_policy_document" "dns_automator" {
 
 resource "aws_iam_group_policy" "policy" {
   name   = "route53-dns-automator"
-  group  = "${aws_iam_group.group.id}"
-  policy = "${data.aws_iam_policy_document.dns_automator.json}"
+  group  = aws_iam_group.group.id
+  policy = data.aws_iam_policy_document.dns_automator.json
 }
