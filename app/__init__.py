@@ -6,7 +6,7 @@ from flask import Flask
 
 def create_app() -> Flask:
     """app factory"""
-    app = Flask(__name__)
+    app = Flask(__name__, static_url_path="")
     app.secret_key = os.environ["SECRET_KEY"]
 
     with app.app_context():
