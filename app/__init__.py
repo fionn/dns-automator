@@ -12,6 +12,7 @@ def create_app() -> Flask:
     with app.app_context():
         # We import here to avoid a circular import because views uses
         # flask.current_app
+        # pylint: disable=import-outside-toplevel
         from .views import BP
         app.register_blueprint(BP)
 
