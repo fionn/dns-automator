@@ -5,34 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-    <!-- Latest compiled and minified CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
-
-    <!-- Optional theme -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
 
     <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
-
-    <style>
-        body {
-            padding-top: 50px;
-        }
-
-        @media (max-width: 768px) {
-            body {
-                padding-top: 130px;
-            }
-        }
-
-        .ip, .friendly_name {
-            padding-right: 10pt;
-        }
-
-        code {
-            color: #f2f2f2 !important;
-            background-color: #1d88a2;
-        }
-    </style>
 
     {% if title -%}
     <title>{{ title }}</title>
@@ -40,16 +15,53 @@
     <title>DNS Management</title>
     {%- endif %}
 
+    <style>
+        main {
+            font-size: smaller;
+            padding-top: 20px;
+        }
+
+        .table td {
+            padding-bottom: 5px;
+        }
+
+        .ip, .friendly_name {
+            padding-right: 1em;
+        }
+
+        code {
+            color: inherit;
+        }
+
+        .ip > code, .friendly_name > code {
+            border: 1px solid inherit;
+            padding: 2px 4px;
+            border-radius: 4px;
+            color: #f2f2f2;
+            background-color: #1d88a2;
+        }
+
+        .none {
+            color: grey;
+        }
+    </style
+
 </head>
 
 <body>
 
-    <nav class="navbar navbar-default navbar-fixed-top">
-        <div class="container">
-            <ul class="nav navbar-nav">
-                <li {% if request.path == '/' %}class="active"{% endif %}><a href="/">Home</a></li>
-                <li {% if request.path == '/dns' %}class="active"{% endif %}><a href="/dns">DNS</a></li>
-                <li {% if request.path == '/servers' %}class="active"{% endif %}><a href="/servers">Servers</a></li>
+    <nav class="navbar navbar-expand navbar-dark bg-dark">
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item {% if request.path == '/' %}active{% endif %}">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                <li class="nav-item {% if request.path == '/dns' %}active{% endif %}">
+                    <a class="nav-link" href="/dns">DNS</a>
+                </li>
+                <li class="nav-item {% if request.path == '/servers' %}active{% endif %}">
+                    <a class="nav-link" href="/servers">Servers</a>
+                </li>
             </ul>
         </div>
     </nav>

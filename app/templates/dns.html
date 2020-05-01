@@ -6,7 +6,7 @@
     <h1>DNS Entries</h1>
 
     <p>
-        Showing all A records on {{ zone_name[:-1] }} and matching them to our servers, if possible.
+        Showing all <code>A</code> records on <code>{{ zone_name[:-1] }}</code> and matching them to our servers, if possible.
     </p>
 
     <table class="table table-hover">
@@ -33,7 +33,7 @@
                 {{ "" }} class="danger"
             {%- endif -%}
             >
-                <td>{{ record["Name"] }}</td>
+                <td><code>{{ record["Name"] }}</code></td>
                 <td>
                     {%- for ip in ips_from_record(record) -%}
                     <span class="ip"><code>{{ ip }}</code></span>

@@ -12,20 +12,26 @@
 
     <h1>Servers</h1>
 
-    {% with messages = get_flashed_messages() -%}
+    {% with messages = get_flashed_messages(with_categories=True) -%}
         {%- if messages -%}
-        <div class="alert alert-info" role="alert">
-            <ul class=flashes style="list-style: none;">
-                {%- for message in messages -%}
-                    <li><i class="fa fa-server fa-lg" aria-hidden="true"></i> {{ message }}</li>
-                {%- endfor -%}
+            {%- for category, message in messages -%}
+            <div class="alert alert-{{ category }}" role="alert">
+                <ul class=flashes style="list-style: none;">
+                    <li><i class="fa fa-server fa-lg" aria-hidden="true"></i> {{ message|safe }}</li>
+                </ul>
+            {%- endfor -%}
+        </div>
+        {%- else -%}
+        <div class="alert" style="visibility: hidden">
+            <ul class="flashes" style="list-style: none;">
+                <li>Empty message</li>
             </ul>
-         </div>
+        </div>
         {%- endif -%}
     {%- endwith %}
 
     <p>
-        Showing all servers in our database.
+        Showing all servers in our records.
     </p>
 
     <table class="table table-striped table-hover">
@@ -43,10 +49,16 @@
             {% for server in servers -%}
             <tr>
                 <td>{{ server.server_id }}</td>
-                <td><code>{{ server.name }}</code></td>
-                <td><code>{{ server.ip_address.exploded }}</code></td>
+                <td><span class="friendly_name"><code>{{ server.name }}</code></span></td>
+                <td><span class="ip"><code>{{ server.ip_address.exploded }}</code></span></td>
                 <td>{{ server.cluster_name }}</td>
-                <td>{{ server.dns.__str__() }}</td>
+                <td>
+                    {%- if server.dns -%}
+                    <code>{{ server.dns.__str__() }}</code>
+                    {%- else -%}
+                    <span class="none">None</span>
+                    {%- endif -%}
+                </td>
                 <td>
                     <form action="/rotate" method="post">
                     <input type='hidden' name='server' value='{{ server.server_id }}'>

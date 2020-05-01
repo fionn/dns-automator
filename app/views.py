@@ -56,17 +56,17 @@ def rotate() -> werkzeug.wrappers.Response:
         for server in INFRASTRUCTURE.servers:
             if server.server_id == server_id:
                 if action == "add":
-                    flask.flash("Added server " + server.name + \
-                                " to DNS A record "
+                    flask.flash("Added server <code>" + server.name + \
+                                "</code> to DNS <code>A</code> record <code>"
                                 + dns.CLUSTER_MAP[server.cluster_id].subdomain
-                                + "." + ZONE.name)
+                                + "." + ZONE.name + "</code>", "success")
                     APP.logger.info("add %s", server.name)
                     ZONE.add_server(server)
                 elif action == "remove":
-                    flask.flash("Removed server " + server.name + \
-                                " from DNS A record "
+                    flask.flash("Removed server <code>" + server.name + \
+                                "</code> from DNS <code>A</code> record <code>"
                                 +  dns.CLUSTER_MAP[server.cluster_id].subdomain
-                                + "." + ZONE.name)
+                                + "." + ZONE.name + "</code>", "danger")
                     APP.logger.info("remove %s", server.name)
                     ZONE.remove_server(server)
                 break
