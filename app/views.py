@@ -17,7 +17,7 @@ ZONE = dns.Zone(HOSTED_ZONE_DOMAIN)
 
 @APP.route("/")
 @APP.route("/index")
-def index() -> flask.signals.template_rendered:
+def index() -> str:
     """index"""
     links = [
         {
@@ -32,14 +32,14 @@ def index() -> flask.signals.template_rendered:
     return flask.render_template("index.html", title="Home", links=links)
 
 @APP.route("/servers")
-def servers_ui() -> flask.signals.template_rendered:
+def servers_ui() -> str:
     """Renders the server UI"""
     servers = INFRASTRUCTURE.servers
     dns.update_servers(ZONE.records, servers)
     return flask.render_template("servers.html", title="Servers", servers=servers)
 
 @APP.route("/dns")
-def dns_ui() -> flask.signals.template_rendered:
+def dns_ui() -> str:
     """Renders the DNS UI"""
     return flask.render_template("dns.html", title="DNS", zone_name=ZONE.name,
                                  servers=INFRASTRUCTURE.servers,
