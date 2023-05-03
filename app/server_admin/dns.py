@@ -3,14 +3,14 @@
 
 import os
 from dataclasses import dataclass
-from ipaddress import ip_address, IPv4Address
-from typing import Set, List, NamedTuple, Optional
+from ipaddress import IPv4Address
+from typing import NamedTuple, Optional
 
 import boto3
 
-NameDomain = NamedTuple("NameSubdomain", [("name", str), ("subdomain", str)])
-Infrastructure = NamedTuple("Infrastructure", [("clusters", List["Cluster"]),
-                                               ("servers", List["Server"])])
+NameDomain = NamedTuple("NameDomain", [("name", str), ("subdomain", str)])
+Infrastructure = NamedTuple("Infrastructure", [("clusters", list["Cluster"]),
+                                               ("servers", list["Server"])])
 
 CLUSTER_MAP = {1: NameDomain("Los Angeles", "la"),
                2: NameDomain("New York", "nyc"),
@@ -57,7 +57,7 @@ class Cluster:
     def __init__(self, cluster_id: int, subdomain: str) -> None:
         self.cluster_id = cluster_id
         self.subdomain = subdomain
-        self.server_instances: List[Server] = []
+        self.server_instances: list[Server] = []
 
     @property
     def cluster_name(self) -> str:
@@ -92,7 +92,7 @@ class Zone:
         raise RuntimeError(f"Failed to find hosted zone for {self.name}")
 
     @property
-    def records(self) -> List[dict]:
+    def records(self) -> list[dict]:
         """Flexible record property"""
         record_sets = self.r53 \
                       .list_resource_record_sets(HostedZoneId=self.id) \
@@ -101,17 +101,17 @@ class Zone:
                 if (r["Type"] == "A" and r["Name"] != self.name)]
 
     @staticmethod
-    def ips_from_record(record: dict) -> Set[IPv4Address]:
+    def ips_from_record(record: dict) -> set[IPv4Address]:
         """Helper to get IP addresses from a given record"""
         ips = set()
         for value in record["ResourceRecords"]:
-            ips.add(ip_address(value["Value"]))
+            ips.add(IPv4Address(value["Value"]))
         return ips
 
-    def _a_record(self, name: str, ips: Set[IPv4Address],
+    def _a_record(self, name: str, ips: set[IPv4Address],
                   action: str, ttl: int = 30) -> None:
         change_batch = {
-            "Comment": "add {} -> {}"
+            "Comment": "add f{} -> {}"  # pylint: disable=consider-using-f-string
                        .format(name, ", ".join([ip.exploded for ip in ips])),
             "Changes": [
                 {
@@ -134,7 +134,7 @@ class Zone:
         """Adds the server's IP to the cluster's subdomain."""
         fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.name
 
-        ips: Set[IPv4Address] = set()
+        ips: set[IPv4Address] = set()
         for record in self.records:
             if fqdn == record["Name"]:
                 ips = self.ips_from_record(record)
@@ -149,7 +149,7 @@ class Zone:
         """Removes the server's IP from the DNS record."""
         fqdn = CLUSTER_MAP[server.cluster_id].subdomain + "." + self.name
 
-        ips: Set[IPv4Address] = set()
+        ips: set[IPv4Address] = set()
         for record in self.records:
             if fqdn == record["Name"]:
                 ips = self.ips_from_record(record)
@@ -174,15 +174,15 @@ def create_infrastructure() -> Infrastructure:
     for cluster_id, ident in CLUSTER_MAP.items():
         clusters.append(Cluster(cluster_id, ident.subdomain))
 
-    clusters[0].create_server(1, ip=ip_address("2.4.6.8"))
-    clusters[1].create_server(2, ip=ip_address("1.0.1.1"))
-    clusters[2].create_server(3, ip=ip_address("5.6.7.8"))
-    clusters[3].create_server(4, ip=ip_address("4.3.2.1"))
-    clusters[3].create_server(5, ip=ip_address("1.2.3.4"))
-    clusters[3].create_server(6, ip=ip_address("1.2.3.5"))
-    clusters[3].create_server(7, ip=ip_address("1.2.3.6"))
-    clusters[4].create_server(8, ip=ip_address("8.1.1.1"))
-    clusters[5].create_server(9, ip=ip_address("9.1.1.1"))
+    clusters[0].create_server(1, ip=IPv4Address("2.4.6.8"))
+    clusters[1].create_server(2, ip=IPv4Address("1.0.1.1"))
+    clusters[2].create_server(3, ip=IPv4Address("5.6.7.8"))
+    clusters[3].create_server(4, ip=IPv4Address("4.3.2.1"))
+    clusters[3].create_server(5, ip=IPv4Address("1.2.3.4"))
+    clusters[3].create_server(6, ip=IPv4Address("1.2.3.5"))
+    clusters[3].create_server(7, ip=IPv4Address("1.2.3.6"))
+    clusters[4].create_server(8, ip=IPv4Address("8.1.1.1"))
+    clusters[5].create_server(9, ip=IPv4Address("9.1.1.1"))
 
     servers = []
     for cluster in clusters:
@@ -193,7 +193,7 @@ def create_infrastructure() -> Infrastructure:
 
     return Infrastructure(clusters, servers)
 
-def print_servers(server_instances: List[Server]) -> None:
+def print_servers(server_instances: list[Server]) -> None:
     """ASCII analogy of the server UI"""
     print("\n\033[1mID\t Name\t Cluster\t IP\t\t DNS\033[0m")
     for server in server_instances:
@@ -201,7 +201,7 @@ def print_servers(server_instances: List[Server]) -> None:
               CLUSTER_MAP[server.cluster_id].name, "\t",
               server.ip_address, server.dns)
 
-def print_dns(dns_records: List[dict], server_instances: List[Server]) -> None:
+def print_dns(dns_records: list[dict], server_instances: list[Server]) -> None:
     """ASCII analogy of the DNS UI"""
     print("\n\033[1mDomain\t\t\t\t\t IP(s)\t\t Server(s)\t Cluster\033[0m")
     for record in dns_records:
@@ -214,7 +214,7 @@ def print_dns(dns_records: List[dict], server_instances: List[Server]) -> None:
               [CLUSTER_MAP[server.cluster_id].name
                for server in matching_servers])
 
-def update_servers(records: List[dict], servers: List[Server]) -> None:
+def update_servers(records: list[dict], servers: list[Server]) -> None:
     """Assigns to each server instance their DNS record name"""
     for server in servers:
         server.dns = None
